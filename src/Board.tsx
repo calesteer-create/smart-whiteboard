@@ -11,7 +11,7 @@ const labels: Record<SaveStatus, string> = {
 };
 
 type Props = { textTool: boolean; activateText: () => void };
-export default function Board({ activateText }: Props) {
+export default function Board({ textTool, activateText }: Props) {
   const [board, setBoard] = useState<BoardDocument>(emptyBoard);
   const boardRef = useRef(board);
   const [status, setStatus] = useState<SaveStatus>("loading");
@@ -122,6 +122,8 @@ export default function Board({ activateText }: Props) {
       onClick={event => {
         if (suppressClick.current) { suppressClick.current = false; return; }
         if (event.target !== event.currentTarget || status === "loading") return;
+        // الكتابة بالنقر مرتبطة بأداة النص؛ مع تعطيل الأداة لا ينشئ النقر على مساحة فارغة نصاً جديداً.
+        if (!textTool) return;
         const rect = event.currentTarget.getBoundingClientRect();
         addText(Math.max(0, event.clientX - rect.left), Math.max(0, event.clientY - rect.top));
       }}>

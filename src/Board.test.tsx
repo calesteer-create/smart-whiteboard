@@ -158,8 +158,8 @@ describe("free writing foundation", () => {
     Object.defineProperties(event, { pointerType: { value: "pen" }, pointerId: { value: 7 }, pressure: { value: pressure } });
     act(() => canvas().dispatchEvent(event));
   }
-  it("starts typing at a click without selecting a tool and preserves IME composition", async () => {
-    await render(); click(canvas());
+  it("starts typing at a click when the text tool is on and preserves IME composition", async () => {
+    await render(); click(button("نص")); click(canvas());
     const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]')!;
     expect(document.activeElement).toBe(area);
     edit("مرحبا English");
@@ -170,7 +170,7 @@ describe("free writing foundation", () => {
     expect((await storage.loadBoard()).elements[0]).toMatchObject({ x: 80, y: 90 });
   });
   it("records multiple pressure-sensitive strokes and restores them alongside text", async () => {
-    await render(); await add("mixed");
+    await render(); click(button("نص")); await add("mixed");
     pen("pointerdown", 20, 30, 0.2); pen("pointermove", 35, 40, 0.8); pen("pointerup", 35, 40, 0);
     pen("pointerdown", 70, 80, 0.4); pen("pointerup", 70, 80, 0);
     await settle();
@@ -201,5 +201,39 @@ describe("free writing foundation", () => {
     const saved = await storage.loadBoard();
     expect(saved.version).toBe(2); expect(saved.elements[0]).toMatchObject({ id: "old", x: 19, y: 28, text: "نص معدّل" });
     expect(window.localStorage.getItem(BOARD_TITLE_KEY)).toContain("عنوان محفوظ");
+  });
+});
+
+describe("text tool gating", () => {
+  it("does not create text when the text tool is off", async () => {
+    await render();
+    click(canvas());
+    await settle();
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(container.querySelector(".welcome-card")).toBeTruthy();
+  });
+
+  it("creates text when the text tool is on", async () => {
+    await render();
+    click(button("نص")); // enable the text tool
+    click(canvas());
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]');
+    expect(area).toBeTruthy();
+    expect(document.activeElement).toBe(area);
+  });
+
+  it("edits existing text with the text tool off", async () => {
+    await render();
+    click(button("نص")); await add("الأول"); // create with the tool on
+    click(button("نص"));                     // disable the text tool
+    click(textButton("الأول"));               // select existing item without creating text
+    click(button("تحرير"));                   // start in-place editing
+    edit("معدل");
+    finish();
+    await settle();
+    const content = container.querySelector(".text-content");
+    expect(content).toBeTruthy();
+    expect(content?.textContent).toBe("معدل");
+    expect(container.querySelector('.text-content')?.textContent).not.toBe("الأول");
   });
 });
