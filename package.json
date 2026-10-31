@@ -10,7 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
+    "@vitejs/plugin-react": "^4.7.0",
     "fabric": "^6.7.1",
     "katex": "^0.16.22",
     "lucide-react": "^0.468.0",
