@@ -18,6 +18,11 @@ const titleStatusLabels: Record<TitleStatus, string> = {
   "changed-elsewhere": "عنوانك غير محفوظ",
 };
 
+// R2: controls whose behaviour is not implemented yet are disabled and explain why.
+function unavailableTitle(label: string): string {
+  return `${label} — غير متاح حاليًا`;
+}
+
 function initialTitleState(): TitleState {
   const stored = loadBoardTitle();
   if (stored.status === "found") return { value: stored.title, status: "saved" };
@@ -29,10 +34,10 @@ export default function App() {
   const [{ value: title, status: titleStatus }, setTitleState] = useState(initialTitleState);
   const currentTitle = useRef(title);
   const saveTimer = useRef<number | null>(null);
-  const [zoom, setZoom] = useState(100);
+  // Zoom is shown but not applied to the canvas yet (R2: the control is disabled).
+  const [zoom] = useState(100);
   const [color, setColor] = useState("#334155");
   const [fontSize, setFontSize] = useState(24);
-  const [tool, setTool] = useState("select");
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -85,17 +90,17 @@ export default function App() {
           <small>{titleStatusLabels[titleStatus]}</small>
         </span>
       </div>
-      <div className="top-actions"><button className="icon-button" title="تراجع"><Undo2 size={18}/></button><button className="icon-button" title="إعادة"><Redo2 size={18}/></button><button className="secondary-button"><Download size={16}/> تصدير</button><button className="primary-button"><Sparkles size={16}/> مساعد ذكي</button></div>
+      <div className="top-actions"><button className="icon-button" title={unavailableTitle("تراجع")} disabled><Undo2 size={18}/></button><button className="icon-button" title={unavailableTitle("إعادة")} disabled><Redo2 size={18}/></button><button className="secondary-button" title={unavailableTitle("تصدير")} disabled><Download size={16}/> تصدير</button><button className="primary-button" title={unavailableTitle("المساعد الذكي")} disabled><Sparkles size={16}/> مساعد ذكي</button></div>
     </header>
     <section className="workspace">
       <aside className="tool-rail" aria-label="أدوات اللوحة">
-        {[[Pencil,"تحديد","select"],[Type,"نص","text"],[Shapes,"أشكال","shapes"],[Grid2X2,"شبكة","grid"],[Palette,"لون","color"],[BookOpen,"معادلة","math"]].map(([Icon,label,id]: any)=><button key={id} className={`tool-button ${tool===id?"active":""}`} title={label} onClick={()=>setTool(id)}><Icon size={19}/><span>{label}</span></button>)}
-        <div className="rail-spacer"/><button className="tool-button" title="مساعدة"><HelpCircle size={19}/><span>مساعدة</span></button>
+        {[[Pencil,"تحديد","select"],[Type,"نص","text"],[Shapes,"أشكال","shapes"],[Grid2X2,"شبكة","grid"],[Palette,"لون","color"],[BookOpen,"معادلة","math"]].map(([Icon,label,id]: any)=><button key={id} className="tool-button" title={unavailableTitle(label)} disabled><Icon size={19}/><span>{label}</span></button>)}
+        <div className="rail-spacer"/><button className="tool-button" title={unavailableTitle("مساعدة")} disabled><HelpCircle size={19}/><span>مساعدة</span></button>
       </aside>
       <section className="canvas-area">
-        <div className="canvas-toolbar"><div className="tool-context"><span className="context-label">الأداة</span><strong>{({select:"تحديد وتحريك",text:"إضافة نص",shapes:"أشكال هندسية",grid:"الشبكة",color:"إعدادات اللون",math:"معادلة علمية"} as any)[tool]}</strong></div><div className="format-controls"><label>اللون <input type="color" value={color} onChange={e=>setColor(e.target.value)}/></label><label>الحجم <input type="number" min="8" max="120" value={fontSize} onChange={e=>setFontSize(Number(e.target.value))}/></label></div></div>
-        <div className="canvas-wrap"><div className="paper"><div className="welcome-card"><div className="welcome-icon"><Sparkles size={24}/></div><h1>كل فكرة تستحق مساحة</h1><p>ابدأ بالكتابة، ارسم مخططاً، أو أضف معادلتك العلمية.</p><div className="starter-actions"><button onClick={()=>setTool("text")}><Type size={16}/> أضف نصاً</button><button onClick={()=>setTool("math")}><BookOpen size={16}/> اكتب معادلة</button><button onClick={()=>setTool("shapes")}><Shapes size={16}/> ارسم شكلاً</button></div><small>هذه واجهة البداية — أدوات اللوحة التفاعلية قادمة على مراحل عبر PRs منفصلة.</small></div></div></div>
-        <footer className="statusbar"><span>جاهز للعمل</span><span className="status-right"><button onClick={()=>setZoom(z=>Math.max(25,z-10))}><ZoomOut size={15}/></button><span>{zoom}%</span><button onClick={()=>setZoom(z=>Math.min(200,z+10))}><ZoomIn size={15}/></button><span className="status-divider"/><span>لوحة 1</span></span></footer>
+        <div className="canvas-toolbar"><div className="tool-context"><span className="context-label">الأداة</span><strong>أدوات الرسم والتحرير غير متاحة حاليًا</strong></div><div className="format-controls"><label>اللون <input type="color" value={color} onChange={e=>setColor(e.target.value)} disabled title={unavailableTitle("اللون")}/></label><label>الحجم <input type="number" min="8" max="120" value={fontSize} onChange={e=>setFontSize(Number(e.target.value))} disabled title={unavailableTitle("الحجم")}/></label></div></div>
+        <div className="canvas-wrap"><div className="paper"><div className="welcome-card"><div className="welcome-icon"><Sparkles size={24}/></div><h1>كل فكرة تستحق مساحة</h1><p>الكتابة على اللوحة والرسم والمعادلات العلمية قيد التطوير، وستتوفر في مراحل لاحقة.</p><div className="starter-actions"><button disabled title={unavailableTitle("أضف نصاً")}><Type size={16}/> أضف نصاً</button><button disabled title={unavailableTitle("اكتب معادلة")}><BookOpen size={16}/> اكتب معادلة</button><button disabled title={unavailableTitle("ارسم شكلاً")}><Shapes size={16}/> ارسم شكلاً</button></div><small>الأزرار المعطّلة غير مكتملة بعد، ولن تعمل حتى تُضاف وظيفتها.</small></div></div></div>
+        <footer className="statusbar"><span>الأدوات التفاعلية غير متاحة حاليًا</span><span className="status-right"><button disabled title={unavailableTitle("تصغير")}><ZoomOut size={15}/></button><span>{zoom}%</span><button disabled title={unavailableTitle("تكبير")}><ZoomIn size={15}/></button><span className="status-divider"/><span>لوحة 1</span></span></footer>
       </section>
     </section>
   </main>;

@@ -12,3 +12,8 @@
 .title-save-status[data-save-status="read-error"] small,.title-save-status[data-save-status="save-error"] small,.title-save-status[data-save-status="changed-elsewhere"] small{color:#a22c2c}
 @media(max-width:700px){.document-title small{display:inline}}
 @media(max-width:360px){.brand-copy strong{font-size:11px}}
+/* R2: actions that are not implemented yet keep their place but look dimmed and do not respond to hover. */
+.app-shell button:disabled,.app-shell input:disabled{opacity:.45;cursor:not-allowed}
+.app-shell .icon-button:disabled:hover,.app-shell .tool-button:disabled:hover{background:transparent}
+.app-shell .tool-button:disabled:hover{color:#7c8598}
+.app-shell .starter-actions button:disabled:hover{border-color:#e4e7f0;color:#566075}
