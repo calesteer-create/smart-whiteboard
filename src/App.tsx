@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Download, FilePlus2, Grid2X2, HelpCircle, Palette, Pencil, Shapes, Type, Undo2, Redo2, ZoomIn, ZoomOut, Sparkles } from "lucide-react";
+import { BookOpen, Download, Grid2X2, HelpCircle, Palette, Pencil, Shapes, Type, Undo2, Redo2, ZoomIn, ZoomOut, Sparkles } from "lucide-react";
 
 export default function App() {
   const [title, setTitle] = useState("مساحة جديدة");
