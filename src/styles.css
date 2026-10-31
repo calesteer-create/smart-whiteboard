@@ -17,3 +17,16 @@
 .app-shell .icon-button:disabled:hover,.app-shell .tool-button:disabled:hover{background:transparent}
 .app-shell .tool-button:disabled:hover{color:#7c8598}
 .app-shell .starter-actions button:disabled:hover{border-color:#e4e7f0;color:#566075}
+/* R3: the paper is a positioned surface; coordinates are measured from its left edge. */
+.paper{position:relative;display:block;min-height:100%;direction:ltr}
+.paper.text-tool-active{cursor:crosshair}
+.welcome-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(100%,500px);direction:rtl;cursor:default}
+.text-element{position:absolute;max-width:calc(100% - 8px);direction:rtl;cursor:default}
+.text-element.selected{outline:2px solid #a69dfb;border-radius:5px}
+.text-content,.text-element textarea{display:block;width:220px;max-width:100%;min-height:48px;padding:10px;border:1px solid #e4e7f0;border-radius:5px;background:#fff;color:#334155;font:16px/1.5 inherit;text-align:start;white-space:pre-wrap;overflow-wrap:anywhere}
+.text-content{font-family:inherit;font-size:16px;line-height:1.5;cursor:pointer}
+.text-element textarea{font-family:inherit;font-size:16px;line-height:1.5;resize:both;min-width:150px;min-height:70px}
+.element-actions{display:flex;gap:4px;background:#fff;padding:4px;direction:rtl}
+.element-actions button,.board-feedback button{border:1px solid #dedbf8;border-radius:6px;background:#f6f5ff;color:#5145bf;padding:4px 8px;font:inherit;cursor:pointer}
+.board-feedback{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:5px 18px;background:#fff;color:#59657a;font-size:11px}
+.board-feedback [data-board-status="read-error"],.board-feedback [data-board-status="save-error"]{color:#a22c2c}

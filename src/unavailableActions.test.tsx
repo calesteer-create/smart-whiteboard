@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BOARD_TITLE_KEY } from "./titleStorage";
 
+// These synchronous R1/R2 tests do not exercise board loading.
+vi.mock("./boardStorage", () => ({ loadBoard: () => new Promise(() => {}), saveBoard: vi.fn() }));
+
 // R2: every control whose behaviour is not implemented must be visibly unavailable.
 // These tests protect against unfinished actions looking like they work.
 
@@ -71,7 +74,7 @@ describe("unavailable actions (R2)", () => {
     expect(button.title).toContain(UNAVAILABLE);
   });
 
-  it.each(["تحديد", "نص", "أشكال", "شبكة", "لون", "معادلة", "مساعدة"])(
+  it.each(["تحديد", "أشكال", "شبكة", "لون", "معادلة", "مساعدة"])(
     "disables the tool-rail button %s",
     (label) => {
       renderApp();
@@ -82,7 +85,7 @@ describe("unavailable actions (R2)", () => {
     },
   );
 
-  it.each(["أضف نصاً", "اكتب معادلة", "ارسم شكلاً"])(
+  it.each(["اكتب معادلة", "ارسم شكلاً"])(
     "disables the starter action %s",
     (label) => {
       renderApp();
@@ -114,22 +117,10 @@ describe("unavailable actions (R2)", () => {
     expect(findInput("الحجم").disabled).toBe(true);
   });
 
-  it("does not leave any enabled button in the board UI", () => {
+  it("explains that unfinished controls remain unavailable", () => {
     renderApp();
-    const enabledButtons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
-      .filter((button) => !button.disabled)
-      .map((button) => button.title || button.textContent);
-
-    expect(enabledButtons).toEqual([]);
-  });
-
-  it("explains in visible text that the editing tools are not available yet", () => {
-    renderApp();
-    const text = container.textContent ?? "";
-
-    expect(text).toContain("الأدوات التفاعلية غير متاحة حاليًا");
-    expect(text).toContain("الأزرار المعطّلة غير مكتملة بعد");
-    expect(text).not.toContain("جاهز للعمل");
+    expect(container.textContent).toContain("بقية الأدوات قيد التطوير");
+    expect(container.textContent).toContain("الأزرار المعطّلة غير مكتملة بعد");
   });
 
   it("keeps the board title editable and saving (R1 is not affected)", () => {

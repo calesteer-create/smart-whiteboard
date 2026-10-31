@@ -28,6 +28,10 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Test
+        run: npm test -- --run
+      - name: TypeScript
+        run: npx tsc --noEmit
       - name: Build
         run: npm run build
       - name: Upload Pages artifact
