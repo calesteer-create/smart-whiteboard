@@ -1,9 +1,17 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "katex/dist/katex.min.css";
 import "./styles.css";
 import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode><App /></React.StrictMode>,
 );
+
+// Register only for production builds; the relative base works under GitHub Pages.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(error => {
+      console.error("Offline support could not be installed", error);
+    });
+  });
+}
