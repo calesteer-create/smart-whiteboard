@@ -1,16 +1,90 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, Download, Grid2X2, HelpCircle, Palette, Pencil, Shapes, Type, Undo2, Redo2, ZoomIn, ZoomOut, Sparkles } from "lucide-react";
+import { DEFAULT_BOARD_TITLE, isBoardTitleStorageEvent, loadBoardTitle, saveBoardTitle } from "./titleStorage";
+
+type TitleStatus = "unsaved" | "saving" | "saved" | "read-error" | "save-error" | "changed-elsewhere";
+
+type TitleState = {
+  value: string;
+  status: TitleStatus;
+};
+
+const titleStatusLabels: Record<TitleStatus, string> = {
+  unsaved: "العنوان غير محفوظ",
+  saving: "جارٍ حفظ العنوان",
+  saved: "العنوان محفوظ محليًا",
+  "read-error": "تعذّر قراءة العنوان",
+  "save-error": "تعذّر حفظ العنوان",
+  "changed-elsewhere": "عنوانك غير محفوظ",
+};
+
+function initialTitleState(): TitleState {
+  const stored = loadBoardTitle();
+  if (stored.status === "found") return { value: stored.title, status: "saved" };
+  if (stored.status === "missing") return { value: DEFAULT_BOARD_TITLE, status: "unsaved" };
+  return { value: DEFAULT_BOARD_TITLE, status: "read-error" };
+}
 
 export default function App() {
-  const [title, setTitle] = useState("مساحة جديدة");
+  const [{ value: title, status: titleStatus }, setTitleState] = useState(initialTitleState);
+  const currentTitle = useRef(title);
+  const saveTimer = useRef<number | null>(null);
   const [zoom, setZoom] = useState(100);
   const [color, setColor] = useState("#334155");
   const [fontSize, setFontSize] = useState(24);
   const [tool, setTool] = useState("select");
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (!isBoardTitleStorageEvent(event)) return;
+
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      const stored = loadBoardTitle();
+      let status: TitleStatus;
+      if (stored.status === "found" && stored.title === currentTitle.current) {
+        status = "saved";
+      } else if (stored.status === "invalid" || stored.status === "unavailable") {
+        status = "read-error";
+      } else {
+        status = "changed-elsewhere";
+      }
+      setTitleState((state) => ({ ...state, status }));
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  function handleTitleChange(nextTitle: string) {
+    if (nextTitle === currentTitle.current) return;
+    currentTitle.current = nextTitle;
+
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    setTitleState({ value: nextTitle, status: "saving" });
+    // Persist synchronously so a reload immediately after editing does not lose the title.
+    const saved = saveBoardTitle(nextTitle);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      setTitleState((state) => state.value === nextTitle
+        ? { ...state, status: saved ? "saved" : "save-error" }
+        : state);
+    }, 0);
+  }
+
   return <main className="app-shell" dir="rtl">
     <header className="topbar">
       <div className="brand-mark">✦</div><div className="brand-copy"><strong>Smart Whiteboard</strong><span>مساحة أفكارك الذكية</span></div>
-      <div className="document-title"><input aria-label="عنوان اللوحة" value={title} onChange={e=>setTitle(e.target.value)} /><span className="saved-dot"/> <small>محلياً</small></div>
+      <div className="document-title">
+        <input aria-label="عنوان اللوحة" value={title} onChange={e=>handleTitleChange(e.target.value)} />
+        <span className="title-save-status" data-save-status={titleStatus} role="status" aria-live="polite" aria-atomic="true" title={titleStatus === "changed-elsewhere" ? "تغيّر العنوان في تبويب آخر" : undefined}>
+          <span className="saved-dot" aria-hidden="true" />
+          <small>{titleStatusLabels[titleStatus]}</small>
+        </span>
+      </div>
       <div className="top-actions"><button className="icon-button" title="تراجع"><Undo2 size={18}/></button><button className="icon-button" title="إعادة"><Redo2 size={18}/></button><button className="secondary-button"><Download size={16}/> تصدير</button><button className="primary-button"><Sparkles size={16}/> مساعد ذكي</button></div>
     </header>
     <section className="workspace">
