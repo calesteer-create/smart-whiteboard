@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BOARD_TITLE_KEY, DEFAULT_BOARD_TITLE } from "./titleStorage";
 
+// These synchronous R1/R2 tests do not exercise board loading.
+vi.mock("./boardStorage", () => ({ loadBoard: () => new Promise(() => {}), saveBoard: vi.fn() }));
+
 const storedTitle = (title: string) => JSON.stringify({ version: 1, title });
 
 let container: HTMLDivElement;
