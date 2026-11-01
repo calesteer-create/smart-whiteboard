@@ -158,8 +158,8 @@ describe("free writing foundation", () => {
     Object.defineProperties(event, { pointerType: { value: "pen" }, pointerId: { value: 7 }, pressure: { value: pressure } });
     act(() => canvas().dispatchEvent(event));
   }
-  it("starts typing at a click when the text tool is on and preserves IME composition", async () => {
-    await render(); click(button("نص")); click(canvas());
+  it("starts typing at a click without the text tool and preserves IME composition", async () => {
+    await render(); click(canvas());
     const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]')!;
     expect(document.activeElement).toBe(area);
     edit("مرحبا English");
@@ -189,6 +189,37 @@ describe("free writing foundation", () => {
     save.mockRestore(); click(button("إعادة محاولة الحفظ")); await settle();
     expect((await storage.loadBoard()).elements[0]).toMatchObject({ type: "ink" });
   });
+  it.each(["pointercancel", "lostpointercapture"])("cleans up %s so the next click can create text", async type => {
+    await render(); pen("pointerdown", 20, 30, 0.5); pen(type, 30, 40, 0.5);
+    click(canvas());
+    expect(container.querySelector('textarea[aria-label="تحرير النص"]')).toBeTruthy();
+    edit("after interruption"); finish(); await settle();
+    expect((await storage.loadBoard()).elements.map(e => e.type)).toEqual(["ink", "text"]);
+  });
+  it("saves a distinct pointer-up endpoint but does not duplicate the last point", async () => {
+    await render();
+    pen("pointerdown", 10, 20, 0.5); pen("pointermove", 20, 30, 0.7); pen("pointerup", 30, 40, 0);
+    pen("pointerdown", 50, 60, 0.5); pen("pointermove", 60, 70, 0.8); pen("pointerup", 60, 70, 0);
+    await settle();
+    const ink = (await storage.loadBoard()).elements;
+    expect(ink[0]).toMatchObject({ points: [{ x: 10, y: 20 }, { x: 20, y: 30 }, { x: 30, y: 40 }] });
+    expect(ink[1]).toMatchObject({ points: [{ x: 50, y: 60 }, { x: 60, y: 70 }] });
+  });
+  it.each([
+    ["right", 795, 100, 580, 100],
+    ["bottom", 100, 595, 100, 490],
+    ["corner", 795, 595, 580, 490],
+    ["normal", 100, 110, 100, 110],
+  ])("keeps the new editor inside the %s area", async (_edge, x, y, expectedX, expectedY) => {
+    await render();
+    act(() => canvas().dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: x, clientY: y })));
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]')!;
+    expect(document.activeElement).toBe(area);
+    expect(area.parentElement?.style.left).toBe(`${expectedX}px`);
+    expect(area.parentElement?.style.top).toBe(`${expectedY}px`);
+    edit("edge text"); finish(); await settle(); unmount(); await render();
+    expect((await storage.loadBoard()).elements[0]).toMatchObject({ x: expectedX, y: expectedY, text: "edge text" });
+  });
   it("loads and safely migrates an R3 document on the next save", async () => {
     const db = await new Promise<IDBDatabase>(resolve => {
       const request = indexedDB.open("smart-whiteboard", 1);
@@ -204,13 +235,13 @@ describe("free writing foundation", () => {
   });
 });
 
-describe("text tool gating", () => {
-  it("does not create text when the text tool is off", async () => {
+describe("free writing and existing text editing", () => {
+  it("creates text when the text tool is off", async () => {
     await render();
     click(canvas());
-    await settle();
-    expect(container.querySelector("textarea")).toBeNull();
-    expect(container.querySelector(".welcome-card")).toBeTruthy();
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]');
+    expect(area).toBeTruthy();
+    expect(document.activeElement).toBe(area);
   });
 
   it("creates text when the text tool is on", async () => {
@@ -224,8 +255,7 @@ describe("text tool gating", () => {
 
   it("edits existing text with the text tool off", async () => {
     await render();
-    click(button("نص")); await add("الأول"); // create with the tool on
-    click(button("نص"));                     // disable the text tool
+    await add("الأول");                       // create without a tool
     click(textButton("الأول"));               // select existing item without creating text
     click(button("تحرير"));                   // start in-place editing
     edit("معدل");

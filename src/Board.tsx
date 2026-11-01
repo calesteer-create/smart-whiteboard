@@ -11,7 +11,7 @@ const labels: Record<SaveStatus, string> = {
 };
 
 type Props = { textTool: boolean; activateText: () => void };
-export default function Board({ textTool, activateText }: Props) {
+export default function Board({ activateText }: Props) {
   const [board, setBoard] = useState<BoardDocument>(emptyBoard);
   const boardRef = useRef(board);
   const [status, setStatus] = useState<SaveStatus>("loading");
@@ -33,9 +33,11 @@ export default function Board({ textTool, activateText }: Props) {
     const rect = paperRef.current!.getBoundingClientRect();
     return { x: Math.max(0, event.clientX - rect.left), y: Math.max(0, event.clientY - rect.top), pressure: event.pressure > 0 ? event.pressure : 0.5 };
   }
-  function finishStroke() {
+  function finishStroke(endpoint?: InkPoint) {
     if (!stroke.current) return;
     const points = stroke.current.points;
+    const last = points[points.length - 1];
+    if (endpoint && (endpoint.x !== last.x || endpoint.y !== last.y)) points.push(endpoint);
     stroke.current = null; setPreview([]);
     if (points.length) {
       const ink: InkElement = { id: crypto.randomUUID(), type: "ink", points };
@@ -116,19 +118,25 @@ export default function Board({ textTool, activateText }: Props) {
         for (const sample of samples) stroke.current.points.push({ x: Math.max(0, sample.clientX - rect.left), y: Math.max(0, sample.clientY - rect.top), pressure: sample.pressure > 0 ? sample.pressure : 0.5 });
         setPreview([...stroke.current.points]);
       }}
-      onPointerUp={event => { if (stroke.current?.pointerId === event.pointerId) { finishStroke(); window.setTimeout(() => { suppressClick.current = false; }, 0); } }}
-      onPointerCancel={event => { if (stroke.current?.pointerId === event.pointerId) finishStroke(); }}
-      onLostPointerCapture={event => { if (stroke.current?.pointerId === event.pointerId) finishStroke(); }}
+      onPointerUp={event => {
+        if (stroke.current?.pointerId !== event.pointerId) return;
+        finishStroke(point(event));
+        // Suppress the pen's synthetic click, but never a later mouse click.
+        window.setTimeout(() => { suppressClick.current = false; }, 0);
+      }}
+      onPointerCancel={event => { if (stroke.current?.pointerId === event.pointerId) { finishStroke(); suppressClick.current = false; } }}
+      onLostPointerCapture={event => { if (stroke.current?.pointerId === event.pointerId) { finishStroke(); suppressClick.current = false; } }}
       onClick={event => {
         if (suppressClick.current) { suppressClick.current = false; return; }
         if (event.target !== event.currentTarget || status === "loading") return;
-        // الكتابة بالنقر مرتبطة بأداة النص؛ مع تعطيل الأداة لا ينشئ النقر على مساحة فارغة نصاً جديداً.
-        if (!textTool) return;
         const rect = event.currentTarget.getBoundingClientRect();
-        addText(Math.max(0, event.clientX - rect.left), Math.max(0, event.clientY - rect.top));
+        // Reserve the editor's width and height, plus room for its actions.
+        const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width - 220));
+        const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height - 110));
+        addText(x, y);
       }}>
       <svg className="ink-layer" aria-hidden="true">{[...board.elements.filter((e): e is InkElement => e.type === "ink").map(e => e.points), ...(preview.length ? [preview] : [])].map((points, i) => <g key={i}>{points.map((p, j) => j === 0 ? <circle key={j} cx={p.x} cy={p.y} r={Math.max(0.7, p.pressure * 2)} fill="#334155"/> : <line key={j} x1={points[j-1].x} y1={points[j-1].y} x2={p.x} y2={p.y} stroke="#334155" strokeLinecap="round" strokeWidth={Math.max(1.4, p.pressure * 4)}/>)}</g>)}</svg>
-      {board.elements.length === 0 && !preview.length && <div className="welcome-card"><div className="welcome-icon"><Sparkles size={24}/></div><h1>كل فكرة تستحق مساحة</h1><p>انقر في أي مكان للكتابة، أو اكتب مباشرة بالقلم.</p><div className="starter-actions"><button disabled={status === "loading"} onClick={activateText}><Type size={16}/> أضف نصاً</button><button disabled title="اكتب معادلة — غير متاح حاليًا"><BookOpen size={16}/> اكتب معادلة</button><button disabled title="ارسم شكلاً — غير متاح حاليًا"><Shapes size={16}/> ارسم شكلاً</button></div><small>الأزرار المعطّلة غير مكتملة بعد.</small></div>}
+      {board.elements.length === 0 && !preview.length && <div className="welcome-card"><div className="welcome-icon"><Sparkles size={24}/></div><h1>كل فكرة تستحق مساحة</h1><p>انقر على مساحة فارغة وابدأ الكتابة، أو اكتب مباشرة بالقلم.</p><div className="starter-actions"><button disabled={status === "loading"} onClick={activateText}><Type size={16}/> أضف نصاً</button><button disabled title="اكتب معادلة — غير متاح حاليًا"><BookOpen size={16}/> اكتب معادلة</button><button disabled title="ارسم شكلاً — غير متاح حاليًا"><Shapes size={16}/> ارسم شكلاً</button></div><small>الأزرار المعطّلة غير مكتملة بعد.</small></div>}
       {board.elements.filter((item): item is TextElement => item.type === "text").map(item => <div className={`text-element${selected === item.id ? " selected" : ""}`} key={item.id} style={{ left: item.x, top: item.y }} onClick={event => event.stopPropagation()}>
         {editing === item.id ? <textarea ref={editorRef} aria-label="تحرير النص" dir="auto" value={item.text} onChange={event => updateText(item.id, event.target.value)} onBlur={finishEditing} onKeyDown={event => {
           if (event.nativeEvent.isComposing) return;
@@ -138,6 +146,6 @@ export default function Board({ textTool, activateText }: Props) {
         {selected === item.id && editing !== item.id && <div className="element-actions"><button onClick={() => startEditing(item)}>تحرير</button><button onClick={deleteSelected}>حذف</button></div>}
       </div>)}
     </div></div>
-    <div className="board-feedback"><span role="status" aria-live="polite" data-board-status={status}>{labels[status]}</span>{status === "save-error" && <button onClick={() => persist(boardRef.current)}>إعادة محاولة الحفظ</button>}<span>انقر للكتابة أو استخدم القلم. حدّد النص لتحريره أو حذفه. أنهِ التحرير بالنقر خارج النص أو Ctrl+Enter؛ يلغي Esc التغييرات.</span></div>
+    <div className="board-feedback"><span role="status" aria-live="polite" data-board-status={status}>{labels[status]}</span>{status === "save-error" && <button onClick={() => persist(boardRef.current)}>إعادة محاولة الحفظ</button>}<span>انقر على مساحة فارغة وابدأ الكتابة، أو استخدم القلم. حدّد النص لتحريره أو حذفه. أنهِ التحرير بالنقر خارج النص أو Ctrl+Enter؛ يلغي Esc التغييرات.</span></div>
   </>;
 }
