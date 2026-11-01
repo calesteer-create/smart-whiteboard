@@ -65,7 +65,7 @@ describe("board text and IndexedDB", () => {
     expect(container.querySelector(".welcome-card")).toBeNull();
     expect(status()).toBe("saved");
     const data = await storage.loadBoard();
-    expect(data.elements.map(item => item.text)).toEqual(["مرحبا بالعالم", "Hello world"]);
+    expect(data.elements.map(item => item.type === "text" ? item.text : "")).toEqual(["مرحبا بالعالم", "Hello world"]);
     expect(data.elements[0]).toMatchObject({ type: "text", x: 80, y: 90 });
     expect(window.localStorage.getItem(BOARD_TITLE_KEY)).toContain("عنوان");
     unmount(); await render();
@@ -80,7 +80,7 @@ describe("board text and IndexedDB", () => {
     act(() => container.querySelector("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await settle(); unmount(); await render();
     expect(textButton("تعديل")).toBeTruthy(); expect(textButton("Second")).toBeTruthy();
-    expect((await storage.loadBoard()).elements.map(e => e.text)).toEqual(["تعديل", "Second"]);
+    expect((await storage.loadBoard()).elements.map(e => e.type === "text" ? e.text : "")).toEqual(["تعديل", "Second"]);
   });
   it("requires selection and confirmation before deletion and persists the deletion", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
@@ -91,7 +91,7 @@ describe("board text and IndexedDB", () => {
     expect(confirm).toHaveBeenCalledTimes(2);
     unmount(); await render();
     expect(textButton("Keep")).toBeTruthy();
-    expect((await storage.loadBoard()).elements.map(e => e.text)).toEqual(["Keep"]);
+    expect((await storage.loadBoard()).elements.map(e => e.type === "text" ? e.text : "")).toEqual(["Keep"]);
   });
   it("cancels a newly created item with Escape", async () => {
     await render(); click(button("نص")); click(canvas()); edit("temporary");
@@ -123,7 +123,7 @@ describe("board text and IndexedDB", () => {
     click(button("نص")); await add("write failure");
     expect(status()).toBe("save-error"); expect(textButton("write failure")).toBeTruthy();
     put.mockRestore(); click(button("إعادة محاولة الحفظ")); await settle();
-    expect((await storage.loadBoard()).elements.map(e => e.text)).toEqual(["write failure"]);
+    expect((await storage.loadBoard()).elements.map(e => e.type === "text" ? e.text : "")).toEqual(["write failure"]);
   });
   it("serializes rapid saves and reports saved only after the newest commit", async () => {
     const pending: Array<() => void> = [];
@@ -137,7 +137,7 @@ describe("board text and IndexedDB", () => {
     expect(save).toHaveBeenCalledTimes(3); expect(status()).toBe("saving");
     await act(async () => { pending[2](); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
     expect(status()).toBe("saved");
-    expect(save.mock.calls[2][0].elements[0].text).toBe("AB");
+    expect((save.mock.calls[2][0].elements[0] as { text: string }).text).toBe("AB");
   });
   it("does not overwrite unrecognized future documents", async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -145,9 +145,125 @@ describe("board text and IndexedDB", () => {
       request.onupgradeneeded = () => request.result.createObjectStore("boards");
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
-    await new Promise<void>(resolve => { const tx = db.transaction("boards", "readwrite"); tx.objectStore("boards").put({ version: 2, elements: [] }, "default"); tx.oncomplete = () => resolve(); });
+    await new Promise<void>(resolve => { const tx = db.transaction("boards", "readwrite"); tx.objectStore("boards").put({ version: 99, elements: [] }, "default"); tx.oncomplete = () => resolve(); });
     db.close(); await render(); expect(status()).toBe("read-error");
     click(button("نص")); await add("local"); expect(status()).toBe("read-error");
     await expect(storage.loadBoard()).rejects.toThrow();
+  });
+});
+
+describe("free writing foundation", () => {
+  function pen(type: string, x: number, y: number, pressure: number) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+    Object.defineProperties(event, { pointerType: { value: "pen" }, pointerId: { value: 7 }, pressure: { value: pressure } });
+    act(() => canvas().dispatchEvent(event));
+  }
+  it("starts typing at a click without the text tool and preserves IME composition", async () => {
+    await render(); click(canvas());
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]')!;
+    expect(document.activeElement).toBe(area);
+    edit("مرحبا English");
+    act(() => area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, isComposing: true, bubbles: true })));
+    expect(container.querySelector("textarea")).toBe(area);
+    finish(); await settle(); unmount(); await render();
+    expect(textButton("مرحبا English")).toBeTruthy();
+    expect((await storage.loadBoard()).elements[0]).toMatchObject({ x: 80, y: 90 });
+  });
+  it("records multiple pressure-sensitive strokes and restores them alongside text", async () => {
+    await render(); click(button("نص")); await add("mixed");
+    pen("pointerdown", 20, 30, 0.2); pen("pointermove", 35, 40, 0.8); pen("pointerup", 35, 40, 0);
+    pen("pointerdown", 70, 80, 0.4); pen("pointerup", 70, 80, 0);
+    await settle();
+    const saved = await storage.loadBoard();
+    expect(saved.elements.map(e => e.type)).toEqual(["text", "ink", "ink"]);
+    expect(saved.elements[1]).toMatchObject({ points: [{ x: 20, y: 30, pressure: 0.2 }, { x: 35, y: 40, pressure: 0.8 }] });
+    unmount(); await render();
+    expect(textButton("mixed")).toBeTruthy();
+    expect(container.querySelectorAll(".ink-layer circle")).toHaveLength(2);
+  });
+  it("keeps ink in memory after a write failure and persists it on retry", async () => {
+    const save = vi.spyOn(storage, "saveBoard").mockRejectedValue(new Error("quota"));
+    await render(); pen("pointerdown", 12, 13, 0.5); pen("pointercancel", 12, 13, 0);
+    await settle(); expect(status()).toBe("save-error");
+    expect(container.querySelectorAll(".ink-layer circle")).toHaveLength(1);
+    save.mockRestore(); click(button("إعادة محاولة الحفظ")); await settle();
+    expect((await storage.loadBoard()).elements[0]).toMatchObject({ type: "ink" });
+  });
+  it.each(["pointercancel", "lostpointercapture"])("cleans up %s so the next click can create text", async type => {
+    await render(); pen("pointerdown", 20, 30, 0.5); pen(type, 30, 40, 0.5);
+    click(canvas());
+    expect(container.querySelector('textarea[aria-label="تحرير النص"]')).toBeTruthy();
+    edit("after interruption"); finish(); await settle();
+    expect((await storage.loadBoard()).elements.map(e => e.type)).toEqual(["ink", "text"]);
+  });
+  it("saves a distinct pointer-up endpoint but does not duplicate the last point", async () => {
+    await render();
+    pen("pointerdown", 10, 20, 0.5); pen("pointermove", 20, 30, 0.7); pen("pointerup", 30, 40, 0);
+    pen("pointerdown", 50, 60, 0.5); pen("pointermove", 60, 70, 0.8); pen("pointerup", 60, 70, 0);
+    await settle();
+    const ink = (await storage.loadBoard()).elements;
+    expect(ink[0]).toMatchObject({ points: [{ x: 10, y: 20 }, { x: 20, y: 30 }, { x: 30, y: 40 }] });
+    expect(ink[1]).toMatchObject({ points: [{ x: 50, y: 60 }, { x: 60, y: 70 }] });
+  });
+  it.each([
+    ["right", 795, 100, 580, 100],
+    ["bottom", 100, 595, 100, 490],
+    ["corner", 795, 595, 580, 490],
+    ["normal", 100, 110, 100, 110],
+  ])("keeps the new editor inside the %s area", async (_edge, x, y, expectedX, expectedY) => {
+    await render();
+    act(() => canvas().dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: x, clientY: y })));
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]')!;
+    expect(document.activeElement).toBe(area);
+    expect(area.parentElement?.style.left).toBe(`${expectedX}px`);
+    expect(area.parentElement?.style.top).toBe(`${expectedY}px`);
+    edit("edge text"); finish(); await settle(); unmount(); await render();
+    expect((await storage.loadBoard()).elements[0]).toMatchObject({ x: expectedX, y: expectedY, text: "edge text" });
+  });
+  it("loads and safely migrates an R3 document on the next save", async () => {
+    const db = await new Promise<IDBDatabase>(resolve => {
+      const request = indexedDB.open("smart-whiteboard", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("boards");
+      request.onsuccess = () => resolve(request.result);
+    });
+    await new Promise<void>(resolve => { const tx = db.transaction("boards", "readwrite"); tx.objectStore("boards").put({ version: 1, elements: [{ id: "old", type: "text", x: 19, y: 28, text: "نص قديم" }] }, "default"); tx.oncomplete = () => resolve(); }); db.close();
+    window.localStorage.setItem(BOARD_TITLE_KEY, JSON.stringify({ version: 1, title: "عنوان محفوظ" }));
+    await render(); click(textButton("نص قديم")); click(button("تحرير")); edit("نص معدّل"); finish(); await settle();
+    const saved = await storage.loadBoard();
+    expect(saved.version).toBe(2); expect(saved.elements[0]).toMatchObject({ id: "old", x: 19, y: 28, text: "نص معدّل" });
+    expect(window.localStorage.getItem(BOARD_TITLE_KEY)).toContain("عنوان محفوظ");
+  });
+});
+
+describe("free writing and existing text editing", () => {
+  it("creates text when the text tool is off", async () => {
+    await render();
+    click(canvas());
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]');
+    expect(area).toBeTruthy();
+    expect(document.activeElement).toBe(area);
+  });
+
+  it("creates text when the text tool is on", async () => {
+    await render();
+    click(button("نص")); // enable the text tool
+    click(canvas());
+    const area = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="تحرير النص"]');
+    expect(area).toBeTruthy();
+    expect(document.activeElement).toBe(area);
+  });
+
+  it("edits existing text with the text tool off", async () => {
+    await render();
+    await add("الأول");                       // create without a tool
+    click(textButton("الأول"));               // select existing item without creating text
+    click(button("تحرير"));                   // start in-place editing
+    edit("معدل");
+    finish();
+    await settle();
+    const content = container.querySelector(".text-content");
+    expect(content).toBeTruthy();
+    expect(content?.textContent).toBe("معدل");
+    expect(container.querySelector('.text-content')?.textContent).not.toBe("الأول");
   });
 });

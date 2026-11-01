@@ -30,3 +30,14 @@
 .element-actions button,.board-feedback button{border:1px solid #dedbf8;border-radius:6px;background:#f6f5ff;color:#5145bf;padding:4px 8px;font:inherit;cursor:pointer}
 .board-feedback{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:5px 18px;background:#fff;color:#59657a;font-size:11px}
 .board-feedback [data-board-status="read-error"],.board-feedback [data-board-status="save-error"]{color:#a22c2c}
+/* Free writing: editing uses a real accessible input, but no permanent box. */
+.paper{cursor:text;touch-action:none;overflow:hidden}
+.ink-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.welcome-card{pointer-events:none;opacity:.65}
+.welcome-card button{pointer-events:auto}
+.text-element{direction:ltr}
+.text-element.selected{outline:none}
+.text-content,.text-element textarea{border:0;border-radius:0;background:transparent;padding:0;min-height:24px;outline:none;resize:none;box-shadow:none;line-height:1.5}
+.text-content{text-align:start;cursor:text}
+.text-element textarea{min-width:150px;caret-color:#6658e8}
+.element-actions{position:absolute;top:100%;z-index:2}

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "test:offline": "node scripts/offline-test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.7.0",
